@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA Assistant</title>
+    <link rel="icon" type="image/png" href="/static/favicon-mark.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="auth-overlay" id="authOverlay">
+        <div class="auth-box">
+            <img src="/static/logo.svg" alt="" class="auth-logo">
+            <h2>Вход в систему</h2>
+            <div class="auth-field">
+                <label>Логин</label>
+                <input type="text" id="authLogin" autocomplete="username" placeholder="Введите логин" value="admin">
+            </div>
+            <div class="auth-field">
+                <label>Пароль</label>
+                <input type="password" id="authPassword" autocomplete="current-password" placeholder="Введите пароль" value="admin"
+                       onkeydown="if(event.key==='Enter') submitLogin()">
+            </div>
+            <div class="auth-error" id="authError" style="display:none;"></div>
+            <button class="auth-submit-btn" id="authSubmitBtn" onclick="submitLogin()">Войти</button>
+        </div>
+    </div>
+
+    <div class="header">
+        <div class="header-left">
+            <div class="burger-menu-wrap">
+                <button class="burger-btn" id="burgerBtn" onclick="toggleBurgerMenu()" title="История запросов">
+                    <span></span><span></span><span></span>
+                </button>
+            </div>
+            <img src="/static/logo.svg" alt="СтандартПроект" class="header-logo">
+            <div class="mode-selector-wrap">
+                <button class="current-mode-chip" id="currentModeChip" onclick="toggleModeMenu()" title="Сменить режим работы">
+                    <span class="current-mode-dot"></span>
+                    <span id="currentModeText">Чат</span>
+                    <svg class="mode-chip-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 9l6 6 6-6"></path>
+                    </svg>
+                </button>
+                <div class="burger-dropdown" id="modeDropdown">
+                    <button class="burger-item active" data-mode="chat" onclick="setModeFromDropdown('chat')">Чат</button>
+                    <button class="burger-item" data-mode="generate" onclick="setModeFromDropdown('generate')">Генерация чек-листа</button>
+                    <button class="burger-item" data-mode="search" onclick="setModeFromDropdown('search')">Поиск по базе</button>
+                </div>
+            </div>
+            <button class="new-chat-btn" id="newChatBtn" onclick="startNewChat()" title="Начать новый чат">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12h14"></path>
+                </svg>
+                <span>Новый чат</span>
+            </button>
+        </div>
+        <div class="header-controls">
+            <div class="project-selector">
+                <select id="projectSelect" onchange="switchProject()">
+                    <option value="">-- Выберите проект --</option>
+                </select>
+                <button class="sync-btn primary admin-only" id="syncExamplesBtn" style="display:none;" onclick="syncTestOpsExamples()">Синхр. примеры</button>
+                <button class="sync-btn admin-only" id="reindexBtn" style="display:none;" onclick="reindexProject()" title="Проиндексировать изменения базы знаний без обращения к TestOps">Индексация</button>
+            </div>
+            <div class="status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="generationStatus" style="font-size: 12px; opacity: 0.8;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="history-overlay" id="burgerOverlay" onclick="if(event.target===this) toggleBurgerMenu(false)">
+        <div class="history-panel" id="burgerPanel">
+            <div class="history-header">
+                <div class="burger-tabs" role="tablist">
+                    <button class="burger-tab active" id="burgerTabHistory" data-tab="history" role="tab" onclick="switchBurgerTab('history')">История</button>
+                    <button class="burger-tab" id="burgerTabDocs" data-tab="docs" role="tab" onclick="switchBurgerTab('docs')">Документы</button>
+                </div>
+                <span class="history-header-user" id="historyCurrentUser"></span>
+                <button class="history-close-btn" onclick="toggleBurgerMenu(false)">✕</button>
+            </div>
+            <div class="burger-tab-panel" id="historyTabPanel">
+                <div class="history-list" id="historyList">
+                    <div class="history-empty">Загрузка…</div>
+                </div>
+            </div>
+            <div class="burger-tab-panel" id="docsTabPanel" style="display:none;">
+                <div class="docs-project" id="docsProjectLabel"></div>
+                <div class="docs-body" id="docsBody">
+                    <div class="docs-dropzone" id="docsDropzone">
+                        <div class="docs-dropzone-text">
+                            Перетащите файлы сюда или
+                            <button type="button" class="docs-pick-btn" id="docsPickBtn">Выбрать…</button>
+                        </div>
+                        <div class="docs-dropzone-ext" id="docsExtensions"></div>
+                        <input type="file" id="docsFileInput" multiple style="display:none">
+                    </div>
+                    <div class="docs-upload-messages" id="docsUploadMessages"></div>
+                    <div class="docs-list" id="docsList"></div>
+                </div>
+            </div>
+            <div class="history-footer">
+                <button class="history-footer-btn" onclick="logoutUser()">Выйти из аккаунта</button>
+                <button class="history-footer-btn history-footer-btn-danger" onclick="endSession()">Завершить сессию</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="chat-panel">
+            <div class="chat-container" id="chatContainer"></div>
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+                <span style="margin-left: 8px; font-size: 14px; color: var(--text-secondary);">Генерация ответа...</span>
+            </div>
+            <div class="input-area">
+                <div class="input-row">
+                    <button class="clear-btn" id="clearBtn" title="Очистить историю">×</button>
+                    <div class="textarea-wrap">
+                        <textarea id="messageInput" rows="1" placeholder="Введите сообщение..."
+                                  onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendMessage();}"></textarea>
+                        <button id="imageUploadBtn" title="Прикрепить изображения" onclick="document.getElementById('imageInput').click()">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                            </svg>
+                        </button>
+                        <input type="file" id="imageInput" accept="image/*" multiple style="display:none">
+                    </div>
+                    <button id="sendBtn" onclick="sendMessage()">Отправить</button>
+                    <button class="generate-btn" onclick="toggleChecklistPanel()" title="Открыть панель чек-листа">Чек-лист</button>
+                </div>
+
+                <div class="meta-filter" id="metaFilter">
+                    <div class="meta-combo" id="moduleCombo">
+                        <button type="button" class="meta-combo-trigger" id="moduleTrigger" aria-haspopup="listbox" aria-expanded="false" title="Модуль — необязательно">
+                            <svg class="meta-combo-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+                                <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+                                <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+                                <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+                            </svg>
+                            <span class="meta-combo-text">
+                                <span class="meta-combo-label">Раздел</span>
+                                <span class="meta-combo-value" id="moduleValue"></span>
+                            </span>
+                            <span class="meta-combo-actions">
+                                <span class="meta-combo-clear" id="moduleClear" title="Очистить">×</span>
+                                <svg class="meta-combo-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M6 9l6 6 6-6"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <div class="meta-combo-menu" id="moduleMenu" role="listbox">
+                            <div class="meta-combo-option" role="option" data-value="1">Авторизация и поиск</div>
+                            <div class="meta-combo-option" role="option" data-value="2">Возбуждение дела</div>
+                            <div class="meta-combo-option" role="option" data-value="3">Реестры</div>
+                            <div class="meta-combo-option" role="option" data-value="4">Блок 20.25</div>
+                            <div class="meta-combo-option" role="option" data-value="5">Созданные дела</div>
+                            <div class="meta-combo-option" role="option" data-value="6">ФССП</div>
+                        </div>
+                        <input type="hidden" id="filterX">
+                    </div>
+
+                    <div class="meta-combo" id="testTypeCombo">
+                        <button type="button" class="meta-combo-trigger" id="testTypeTrigger" aria-haspopup="listbox" aria-expanded="false" title="Вид тестов — необязательно">
+                            <svg class="meta-combo-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 6h16M4 12h10M4 18h6"></path>
+                            </svg>
+                            <span class="meta-combo-text">
+                                <span class="meta-combo-label">Вид тестов</span>
+                                <span class="meta-combo-value" id="testTypeValue"></span>
+                            </span>
+                            <span class="meta-combo-actions">
+                                <span class="meta-combo-clear" id="testTypeClear" title="Очистить">×</span>
+                                <svg class="meta-combo-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M6 9l6 6 6-6"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <div class="meta-combo-menu" id="testTypeMenu" role="listbox">
+                            <div class="meta-combo-option" role="option" data-value="1">Общая проверка</div>
+                            <div class="meta-combo-option" role="option" data-value="2">Негативные тесты</div>
+                            <div class="meta-combo-option" role="option" data-value="3">Позитивные тесты</div>
+                            <div class="meta-combo-option" role="option" data-value="4">Негативные функциональные</div>
+                            <div class="meta-combo-option" role="option" data-value="5">Функциональные</div>
+                        </div>
+                        <input type="hidden" id="filterZ">
+                    </div>
+
+                    <div class="meta-count" id="countField" title="Желаемое количество тест-кейсов — необязательно. Пусто = решает модель по смыслу ТЗ">
+                        <svg class="meta-combo-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 3v18M15 3v18M4 8h16M4 16h16"></path>
+                        </svg>
+                        <input type="number" id="filterCount" min="1" max="50" placeholder="Кол-во">
+                        <span class="meta-combo-clear" id="countClear" title="Очистить">×</span>
+                    </div>
+                </div>
+            </div>
+            <div id="imagePreviewContainer" class="image-preview-container" style="display: none;"></div>
+        </div>
+
+        <div class="testcase-editor-view hidden" id="testCaseEditorView">
+            <div class="testcase-editor-header">
+                <h3>Редактирование тест-кейса <span class="badge" id="editorItemId"></span></h3>
+            </div>
+            <div class="testcase-editor-body">
+                <div class="testcase-editor-group">
+                    <label class="testcase-editor-label">Название</label>
+                    <div class="testcase-editor-field testcase-editor-title" id="editorTitleField" contenteditable="true"></div>
+                </div>
+                <div class="testcase-editor-group">
+                    <label class="testcase-editor-label">Шаги</label>
+                    <div class="testcase-editor-steps" id="editorStepsContainer"></div>
+                </div>
+                <div class="testcase-editor-group">
+                    <label class="testcase-editor-label">Ожидаемый результат</label>
+                    <div class="testcase-editor-field testcase-editor-expected" id="editorExpectedField" contenteditable="true"></div>
+                </div>
+            </div>
+            <div class="testcase-editor-actions">
+                <button class="testcase-editor-save-btn" onclick="saveTestCaseEdit()">Сохранить</button>
+                <button class="testcase-editor-cancel-btn" onclick="cancelTestCaseEdit()">Отменить</button>
+            </div>
+        </div>
+
+        <div class="checklist-panel hidden" id="checklistPanel">
+            <div class="panel-header">
+                <h3 id="checklistTitle">Чек-лист <span class="badge" id="checklistCount">0</span></h3>
+                <h3 id="searchTitle" style="display:none;"><span id="searchTitleText">Результаты поиска</span> <span class="badge" id="searchCount">0</span></h3>
+                <h3 id="previewTitle" style="display:none;">Найденные кейсы — предпросмотр <span class="badge" id="previewCount">0</span></h3>
+                <button class="close-btn" onclick="toggleChecklistPanel()">×</button>
+            </div>
+            <div class="checklist-container" id="checklistContainer">
+                <div class="checklist-empty">
+                    <p>Чек-лист пока пуст</p>
+                    <p style="font-size: 13px; margin-top: 8px;">Переключитесь в режим «Генерация» и опишите функционал</p>
+                </div>
+            </div>
+            <div class="search-results-container" id="searchResultsContainer" style="display:none;"></div>
+            <div class="preview-hint" id="previewHint" style="display:none;">Чтобы работать с ними, нажмите «Редактировать найденные» в чате</div>
+            <div class="search-results-container preview-container" id="previewContainer" style="display:none;"></div>
+
+            <div class="search-more" id="searchMore" style="display:none;">
+                <span class="search-more-info" id="searchMoreInfo"></span>
+                <button class="search-more-btn" onclick="showMoreSearchResults()">Показать ещё</button>
+            </div>
+            <div class="checklist-actions" id="checklistActionsBar">
+                <button class="extend-btn" onclick="openExtendModal()" title="Добавить новые тест-кейсы, не изменяя существующие">Дополнить</button>
+                <button class="add-empty-btn" onclick="addEmptyChecklistItem()" title="Добавить пустой тест-кейс вручную">+ Кейс</button>
+                <button class="regenerate-btn" onclick="openUpdateModal()">Обновить</button>
+                <button class="export-btn" onclick="openExportModal()" title="Отправить отмеченные тест-кейсы в TestOps">Экспорт</button>
+                <button class="select-all-btn" onclick="selectAllChecklist()">Выбрать все</button>
+                <button class="clear-checklist-btn" onclick="clearChecklist()">Очистить</button>
+                <button class="undo-extend-btn" id="undoExtendBtn" style="display:none;" onclick="undoExtend()" title="Убрать тест-кейсы, добавленные последним дополнением">Отменить дополнение</button>
+            </div>
+            <div class="checklist-actions" id="searchActionsBar" style="display:none;">
+                <button class="regenerate-btn" onclick="openUpdateModal()" title="Обновить отмеченные тест-кейсы: править, объединять или разбивать">Обновить</button>
+                <button class="export-btn" onclick="openExportModal()" title="Отправить отмеченные тест-кейсы в TestOps">Экспорт</button>
+                <button class="select-all-btn" onclick="selectAllSearchResults()">Выбрать все</button>
+                <button class="clear-checklist-btn" onclick="clearSearchChecklist()">Очистить результаты</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="updateModal">
+        <div class="modal">
+            <h3>Обновление тест-кейсов</h3>
+            <p style="color: #6b7280; margin-bottom: 12px; font-size: 14px;" id="updateModalHint">
+                Опишите новые требования или изменения. Обновлены будут <strong>только отмеченные галочками</strong> тест-кейсы, остальные останутся как есть.
+            </p>
+            <textarea id="updateTechSpec" placeholder="Введите новые требования или изменения..."></textarea>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeUpdateModal()">Отмена</button>
+                <button class="confirm-btn" onclick="confirmUpdate()">Обновить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="extendModal">
+        <div class="modal">
+            <h3>Дополнение чек-листа</h3>
+            <p style="color: #6b7280; margin-bottom: 12px; font-size: 14px;">
+                Опишите, какие тест-кейсы добавить. <strong>Существующие тест-кейсы не изменятся</strong> —
+                новые будут дописаны в конец. Если оставить поле пустым, модель дополнит чек-лист по исходному ТЗ.
+            </p>
+            <textarea id="extendTechSpec" placeholder="Например: добавь негативные проверки для формы загрузки файлов..."></textarea>
+            <div class="modal-fields">
+                <label class="modal-field">
+                    <span>Раздел</span>
+                    <select id="extendX">
+                        <option value="">Не важен</option>
+                        <option value="1">Авторизация и поиск</option>
+                        <option value="2">Возбуждение дела</option>
+                        <option value="3">Реестры</option>
+                        <option value="4">Блок 20.25</option>
+                        <option value="5">Созданные дела</option>
+                        <option value="6">ФССП</option>
+                    </select>
+                </label>
+                <label class="modal-field">
+                    <span>Вид тестов</span>
+                    <select id="extendZ">
+                        <option value="">Любой</option>
+                        <option value="1">Общая проверка</option>
+                        <option value="2">Негативные тесты</option>
+                        <option value="3">Позитивные тесты</option>
+                        <option value="4">Негативные функциональные</option>
+                        <option value="5">Функциональные</option>
+                    </select>
+                </label>
+                <label class="modal-field modal-field-narrow">
+                    <span>Сколько</span>
+                    <input type="number" id="extendCount" min="1" max="50" placeholder="авто">
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeExtendModal()">Отмена</button>
+                <button class="confirm-btn" onclick="confirmExtend()">Дополнить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal">
+            <h3>Экспорт в TestOps</h3>
+            <p style="color: #6b7280; margin-bottom: 12px; font-size: 14px;">
+                Отправлены будут <strong>отмеченные галочками</strong> тест-кейсы, среди них —
+                только созданные или изменённые с прошлой отправки. Уже синхронизированные пропускаются.
+            </p>
+            <div class="modal-fields">
+                <label class="modal-field">
+                    <span>Папка</span>
+                    <input type="text" id="exportFolderPath" placeholder="1.1.1" autocomplete="off">
+                </label>
+            </div>
+            <p style="color: #6b7280; margin-top: 4px; font-size: 13px;">
+                Введите только номер папки, без названия: для
+                <em>«1.1.1 – Авторизация»</em> достаточно <strong>1.1.1</strong>.
+                Папка должна существовать в TestOps. Номер тест-кейса в названии
+                проставляется автоматически, следующим свободным в этой папке.
+            </p>
+            <div class="export-summary" id="exportSummary"></div>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeExportModal()">Отмена</button>
+                <button class="confirm-btn" id="exportConfirmBtn" onclick="confirmExport()">Экспортировать</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="exportConflictsModal">
+        <div class="modal modal-wide">
+            <h3>Кейсы изменены в TestOps</h3>
+            <p class="conflicts-hint">
+                Эти тест-кейсы изменили в TestOps после того, как вы начали их править.
+                Остальные отмеченные кейсы уже отправлены. Выберите, что сделать с каждым.
+            </p>
+            <div class="conflicts-bulk">
+                <span>Для всех:</span>
+                <button type="button" class="conflicts-bulk-btn" onclick="setAllConflictResolutions('overwrite')">Перезаписать</button>
+                <button type="button" class="conflicts-bulk-btn" onclick="setAllConflictResolutions('take_remote')">Взять из TestOps</button>
+                <button type="button" class="conflicts-bulk-btn" onclick="setAllConflictResolutions('save_as_new')">Сохранить как новые</button>
+                <button type="button" class="conflicts-bulk-btn" onclick="setAllConflictResolutions('skip')">Пропустить</button>
+            </div>
+            <div class="conflicts-list" id="exportConflictsList"></div>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeConflictsModal()">Отмена</button>
+                <button class="confirm-btn" id="exportConflictsConfirmBtn" onclick="confirmConflicts()">Продолжить экспорт</button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="successSound" src="/static/notify-success.mp3" preload="auto"></audio>
+    <audio id="errorSound" src="/static/notify-error.mp3" preload="auto"></audio>
+
+    <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

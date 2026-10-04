@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: qa_assistant_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qa_admin
+      POSTGRES_PASSWORD: qa_admin_password
+      POSTGRES_DB: qa_assistant
+    ports:
+      - "5432:5432"
+    volumes:
+      - qa_assistant_pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa_admin -d qa_assistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.0
+    container_name: qa_assistant_search
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - qa_assistant_searchdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  qa_assistant_pgdata:
+  qa_assistant_searchdata:

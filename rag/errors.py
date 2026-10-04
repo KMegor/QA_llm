@@ -1,0 +1,3 @@
+
+class SearchRerankUnavailableError(RuntimeError):
+    pass
